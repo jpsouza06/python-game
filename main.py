@@ -1,23 +1,37 @@
 import pygame
 import player_status
+import animation
+import sprite_sheet
 
 SCREEN_WIDTH = 950
 SCREEN_HEIGHT = 600
 
+WHITE = pygame.Color(255, 255, 255)
 SCREEN_BG = (100, 100, 100)
-BLACK = (0, 0, 0)
-animation_list_right = []
-animation_list_left = []
+
+player_position = [475, 450]
+
 animation_steps = [
-    [[0, 0], [0, 1], [0, 2], [0, 3]],  # Stopped - Action=0
+    [[0, 0], [0, 1], [0, 2], [0, 3]],   # Stopped - Action=0
     [[1, 0], [1, 1], [1, 2], [1, 3]],   # Run - Action=1
-    [[0, 4], [0, 5], [0, 6], [0, 7]],  # Stopped with sword - Action=2
-    [[1, 4], [1, 5], [1, 6], [1, 7]],  # Run with sword - Action=3
+    [[0, 4], [0, 5], [0, 6], [0, 7]],   # Stopped with sword - Action=2
+    [[1, 4], [1, 5], [1, 6], [1, 7]],   # Run with sword - Action=3
+    [[5, 1]],                           # Lowered - Action=4
+    [[7, 0], [7, 1], [7, 2], [7, 3]],  # Walk lowered - Action=5
+    [[2, 0]],                           # Jump - Action=6
+    [[2, 4]]                            # Jump With Sword - Action=7
 ]
 last_update = pygame.time.get_ticks()
-animation_cooldown = 250
+animation_cooldown = 150
 
 run = True
+
+objects = [
+    pygame.Rect(0, SCREEN_HEIGHT - 50, SCREEN_WIDTH, 50),
+    pygame.Rect(0, SCREEN_HEIGHT - 100, 50, 50)
+]
+
+clock = pygame.time.Clock()
 
 
 def init_display():
@@ -26,41 +40,54 @@ def init_display():
     return pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
 
 
-def add_animations():
-    import sprite_sheet
-
-    steps = 0
-
-    # Carrega imagens do ninja
-    sprite_sheet_image = pygame.image.load('ninja.png').convert_alpha()
-    sprite_sheet = sprite_sheet.SpriteSheet(sprite_sheet_image)
-
-    # Adciona as animações para a direita na lista
-    for animation in animation_steps:
-        temp_img_list = []
-        temp_img_list.clear()
-        for x in range(len(animation)):
-            temp_img_list.append(sprite_sheet.getImage(animation_steps[steps][x], 24, 17, 5, BLACK, True))
-        animation_list_right.append(temp_img_list)
-        steps += 1
-
-    steps = 0
-    # Adciona as animações para a esquerda na lista
-    for animation in animation_steps:
-        temp_img_list = []
-        temp_img_list.clear()
-        for x in range(len(animation)):
-            temp_img_list.append(sprite_sheet.getImage(animation_steps[steps][x], 24, 17, 5, BLACK, False))
-        animation_list_left.append(temp_img_list)
-        steps += 1
-
-
 screen = init_display()
-add_animations()
-ninjaStatus = player_status.PlayerStatus(2.00, 1.00, 10.00, 5.00)
+
+# Load Image
+sprite_sheet_image = pygame.image.load('ninja.png').convert_alpha()
+sprite_sheet = sprite_sheet.SpriteSheet(sprite_sheet_image)
+
+# Add animation right
+animation_list_right = animation.addAnimation(
+    animation_steps, sprite_sheet, 29, 17, 5, True)
+
+# Add animation left
+animation_list_left = animation.addAnimation(
+    animation_steps, sprite_sheet, 29, 17, 5, False)
+
+# Create ninja
+ninjaStatus = player_status.PlayerStatus(
+    2.50, 2.50, 7.00, 7.00, [475, 450], 0.4, 2)
+
+ninja = screen.blit(animation_list_right[ninjaStatus.action][ninjaStatus.frame], ninjaStatus.player_position)
 
 while run:
     screen.fill(SCREEN_BG)
+
+    ninja_sensors = [
+        pygame.Rect(ninjaStatus.player_position[0], ninjaStatus.player_position[1], 2, ninja.height),  # left,
+        pygame.Rect(ninjaStatus.player_position[0], ninjaStatus.player_position[1], ninja.width, 2),  # top
+        pygame.Rect(ninjaStatus.player_position[0] + ninja.width, ninjaStatus.player_position[1], 2, ninja.height),  # right
+        pygame.Rect(ninjaStatus.player_position[0], ninjaStatus.player_position[1] + ninja.height, ninja.width, 2),  # down
+    ]
+
+    for sensor in ninja_sensors:
+        pygame.draw.rect(screen, WHITE, sensor)
+
+    for obj in objects:
+        if ninja_sensors[0].colliderect(obj):
+            ninjaStatus.collided_left = True
+
+        elif ninja_sensors[1].colliderect(obj):
+            ninjaStatus.collided_up = True
+
+        elif ninja_sensors[2].colliderect(obj):
+            ninjaStatus.collided_right = True
+
+        elif ninja_sensors[3].colliderect(obj):
+            ninjaStatus.collided_down = True
+            ninjaStatus.ground = True
+
+        pygame.draw.rect(screen, WHITE, obj)
 
     current_time = pygame.time.get_ticks()
 
@@ -71,13 +98,13 @@ while run:
             ninjaStatus.frame = 0
 
     if ninjaStatus.right:
-        screen.blit(animation_list_right[ninjaStatus.action][ninjaStatus.frame], ninjaStatus.player_position)
+        ninja = screen.blit(animation_list_right[ninjaStatus.action][ninjaStatus.frame], ninjaStatus.player_position)
     elif ninjaStatus.left:
-        screen.blit(animation_list_left[ninjaStatus.action][ninjaStatus.frame], ninjaStatus.player_position)
+        ninja = screen.blit(animation_list_left[ninjaStatus.action][ninjaStatus.frame], ninjaStatus.player_position)
     elif ninjaStatus.old_direction:
-        screen.blit(animation_list_left[ninjaStatus.action][ninjaStatus.frame], ninjaStatus.player_position)
+        ninja = screen.blit(animation_list_left[ninjaStatus.action][ninjaStatus.frame], ninjaStatus.player_position)
     else:
-        screen.blit(animation_list_right[ninjaStatus.action][ninjaStatus.frame], ninjaStatus.player_position)
+        ninja = screen.blit(animation_list_right[ninjaStatus.action][ninjaStatus.frame], ninjaStatus.player_position)
 
     # Event Handler
     for event in pygame.event.get():
@@ -89,6 +116,12 @@ while run:
                 ninjaStatus.right = True
             if event.key == pygame.K_LEFT:
                 ninjaStatus.left = True
+            if event.key == pygame.K_DOWN:
+                ninjaStatus.down = True
+            if event.key == pygame.K_SPACE:
+                if ninjaStatus.ground:
+                    ninjaStatus.jump = True
+                    ninjaStatus.jumping = True
 
         if event.type == pygame.KEYUP:
             if event.key == pygame.K_RIGHT:
@@ -97,9 +130,17 @@ while run:
             if event.key == pygame.K_LEFT:
                 ninjaStatus.left = False
                 ninjaStatus.old_direction = True
+            if event.key == pygame.K_DOWN:
+                ninjaStatus.down = False
 
-                # Speed Control
-    ninjaStatus.speedControl()
+    # if not ninjaStatus.ground and ninjaStatus.speed_y < 0 and ninjaStatus.player_position[1] >= 520:
+    #     ninjaStatus.ground = True
+    #     ninjaStatus.speed_y = 0
+    #     ninjaStatus.player_position[1] = 515
+
+    # Speed Control
+    ninjaStatus.speedXControl()
+    ninjaStatus.speedYControl()
 
     # Action Control
     ninjaStatus.actionControl()
@@ -109,5 +150,6 @@ while run:
 
     pygame.display.update()
 
+    clock.tick(60)
 
 pygame.quit()
